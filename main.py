@@ -7,28 +7,21 @@ import pandas as pd
 import numpy as np
 import json
 import datetime
+import click
+import threading
+import math
+import os, sys
 
 from tdx.engine import Engine, AsyncEngine, get_stock_type
 
+from utils import get_code_session, get_stock_list, GLOBAL, logger, mqueue, tickRunning
 
-def get_stock_list(engine):
-    with engine.connect():
-         return engine.stock_list
-
-def get_code_session(engine, code, start, end):
-    with engine.connect():
-        daily_bar = engine.get_security_bars(code, '1d', start, end)
-        if daily_bar is None or daily_bar.empty:
-            return []
-        session = daily_bar.index
-        return session
-    raise Exception("engine connect failed!!!")
-
-
+from tickWriter import WriterTickMongo
 
 class TEngine(AsyncEngine):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, queue, *args, **kwargs):
         super(TEngine, self).__init__(*args, **kwargs)
+        self.queue = queue
 
     async def get_transaction(self, code, date):
         res = []
@@ -55,48 +48,79 @@ class TEngine(AsyncEngine):
         post = stock_tick_db.tick
         # post.insert({'a':123423143241234, 'b': '43545666'})
 
-        res = [self.get_transaction(code, trade_day) for trade_day in
-               trade_days]
-        completed, pending = self.aapi.run_until_complete(asyncio.wait(res))
-        buf = []
-        for t in completed:
-            df = t.result()
-            if not df.empty:
-                map = dict()
-                map['date'] = str(df.date[0])
-                map['code'] = df.code[0]
-                map['time'] = df.index.tolist()
-                map['buyorsell'] = df.buyorsell.tolist()
-                map['buyorsell'] = [int(x) for x in map['buyorsell']]
-                map['price'] = df.price.tolist()
-                map['vol'] = df.vol.tolist()
-                map['vol'] = [int(x) for x in map['vol']]
-                print(map)
-                buf.append(map)
-                if len(buf) == 1000:
-                    # post.insert(buf)
-                    buf.clear()
-        # post.insert(buf)
+        trades_day_slice = 365
+        times = int(math.ceil(len(trade_days) / trades_day_slice))
+        for i in range(times):
+            head = i * trades_day_slice
+            tail = head + trades_day_slice
+            if tail > len(trade_days):
+                tail = len(trade_days)
+
+            try:
+                res = [self.get_transaction(code, int(trade_day)) for trade_day in
+                   trade_days[head:tail]]
+                completed, pending = self.aapi.run_until_complete(asyncio.wait(res))
+            except ValueError as e:
+                logger.error("code {0} from {1} to {2} error, {3}".format(
+                    code, trade_days[head], trade_days[tail - 1], str(e)
+                ))
+                continue
+            buf = []
+            for t in completed:
+                df = t.result()
+                if not df.empty:
+                    self.queue.put(df)
+
+def getTickThread():
+    print('start get tick thread')
+    tickRunning = True
+    # 0 - 3493
+    if len(sys.argv) == 1:
+        startCode = None
+        endCode = None
+    elif len(sys.argv) == 2:
+        startCode = int(sys.argv[1])
+        endCode = None
+    else:
+        startCode = int(sys.argv[1])
+        endCode = int(sys.argv[2])
+    aeg = TEngine(mqueue, ip='202.108.253.130', auto_retry=True, raise_exception=True)
+    aeg.connect()
+    stock_list = get_stock_list(aeg)
+    # start = pd.Timestamp('20180126')
+    start = pd.Timestamp(GLOBAL('start_date'))
+    end = pd.Timestamp(GLOBAL('end_date'))
+    # logger.info('pid: {0} starting..... from {1} to {2}, '
+    #             'startCode:{3}, endCode:{4}'.format(os.getpid(), start, end, startCode, endCode))
+    test_codes = stock_list.code
+    # for code in stock_list.code[startCode:endCode]:
+    with click.progressbar(
+            # stock_list.code[startCode:endCode],
+            test_codes,
+            label="Merging get tick datas:",
+            item_show_func=lambda e: e if e is None else str(e[0]),
+    ) as codes:
+        for code in codes:
+            logger.info('pid: {0} get code {1}'.format(os.getpid(), code))
+            sessions = get_code_session(aeg, code, start, end)
+            if len(sessions) == 0:
+                continue
+            trade_days = sessions.strftime("%Y%m%d").tolist()
+            aeg.get_tick(code, trade_days)
+
+    aeg.exit()
+    tickRunning = False
+    print("stop get tick thread")
 
 
+def main():
+    wthread = WriterTickMongo(mqueue)
+    tickThread = threading.Thread(target=getTickThread)
+
+    wthread.start()
+    tickThread.start()
+    wthread.join()
 
 
 if __name__ == '__main__':
-    eg = Engine(auto_retry=True, multithread=True, best_ip=True, thread_num=1, raise_exception=True)
-    stock_list = get_stock_list(eg)
-    aeg = TEngine(ip='202.108.253.130', raise_exception=True)
-    start = pd.Timestamp('20180126')
-    now = datetime.datetime.now()
-    end = datetime.date.today()
-    if now.time() < datetime.time(15, 5):
-        end = end - datetime.timedelta(days=1)
-    end = pd.Timestamp(end)
-    print('starting..... from {0} to {1}.'.format(start, end))
-    with aeg.connect():
-        size = len(stock_list.code)
-        for code in stock_list.code[:int(size*0.3)]:
-            sessions = get_code_session(eg, code, start, end)
-            if len(sessions) == 0:
-                continue
-            trade_days = map(int, sessions.strftime("%Y%m%d"))
-            aeg.get_tick(code, trade_days)
+    main()

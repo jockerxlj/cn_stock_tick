@@ -16,5 +16,5 @@ if __name__ == '__main__':
     stock_list = get_stock_list(eg)
     index = 1
     for code in stock_list.code:
-        code_finishing_post.insert({str(index): code})
+        code_finishing_post.insert({'code': code, 'index': index})
         index = index + 1

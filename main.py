@@ -73,6 +73,7 @@ class TEngine(AsyncEngine):
 
 def getTickThread():
     print('start get tick thread')
+    global tickRunning
     tickRunning = True
     # 0 - 3493
     if len(sys.argv) == 1:
@@ -84,7 +85,7 @@ def getTickThread():
     else:
         startCode = int(sys.argv[1])
         endCode = int(sys.argv[2])
-    aeg = TEngine(mqueue, ip='202.108.253.130', auto_retry=True, raise_exception=True)
+    aeg = TEngine(mqueue, ip='180.153.18.170', auto_retry=True, raise_exception=True)
     aeg.connect()
     stock_list = get_stock_list(aeg)
     # start = pd.Timestamp('20180126')
@@ -92,7 +93,7 @@ def getTickThread():
     end = pd.Timestamp(GLOBAL('end_date'))
     # logger.info('pid: {0} starting..... from {1} to {2}, '
     #             'startCode:{3}, endCode:{4}'.format(os.getpid(), start, end, startCode, endCode))
-    test_codes = stock_list.code
+    test_codes = ['300371']
     # for code in stock_list.code[startCode:endCode]:
     with click.progressbar(
             # stock_list.code[startCode:endCode],
@@ -114,13 +115,18 @@ def getTickThread():
 
 
 def main():
-    wthread = WriterTickMongo(mqueue)
     tickThread = threading.Thread(target=getTickThread)
 
-    wthread.start()
-    tickThread.start()
-    wthread.join()
-
+    threads = []
+    for x in range(5):
+        wthread = WriterTickMongo(mqueue)
+        threads.append(wthread)
+    threads.append(tickThread)
+    for thr in threads:
+        thr.start()
+    for thr in threads:
+        if thr.isAlive():
+            thr.join()
 
 if __name__ == '__main__':
     main()

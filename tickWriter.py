@@ -22,7 +22,7 @@ class WriterTickMongo(threading.Thread):
 
     def run(self):
         print('start mongo write tick thread')
-        while True:
+        while self.queue.empty() == False or tickRunning == True:
             df = self.queue.get()
             buf = []
             if not df.empty:
@@ -35,13 +35,10 @@ class WriterTickMongo(threading.Thread):
                 map['price'] = df.price.tolist()
                 map['vol'] = df.vol.tolist()
                 map['vol'] = [int(x) for x in map['vol']]
-                logger.debug(map)
+                # logger.debug(map)
                 buf.append(map)
                 if len(buf) == 1000:
                     self.post.insert(buf)
                     buf.clear()
             if len(buf):
                 self.post.insert(buf)
-            if self.queue.empty() and tickRunning == False:
-                print('stop mongo write tick thread')
-                break

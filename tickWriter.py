@@ -6,7 +6,7 @@ import queue
 import threading
 import pymongo
 
-from utils import GLOBAL, MONGODB, logger, tickRunning
+from utils import GLOBAL, MONGODB, logger, globalvar
 
 
 class WriterTickMongo(threading.Thread):
@@ -22,7 +22,7 @@ class WriterTickMongo(threading.Thread):
 
     def run(self):
         print('start mongo write tick thread')
-        while self.queue.empty() == False or tickRunning == True:
+        while self.queue.empty() is False or globalvar.get('tickRunning') is True:
             df = self.queue.get()
             buf = []
             if not df.empty:

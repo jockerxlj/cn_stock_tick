@@ -14,7 +14,7 @@ import os, sys
 
 from tdx.engine import Engine, AsyncEngine, get_stock_type
 
-from utils import get_code_session, get_stock_list, GLOBAL, logger, mqueue, tickRunning
+from utils import get_code_session, get_stock_list, GLOBAL, logger, mqueue, globalvar
 
 from tickWriter import WriterTickMongo
 
@@ -73,8 +73,7 @@ class TEngine(AsyncEngine):
 
 def getTickThread():
     print('start get tick thread')
-    global tickRunning
-    tickRunning = True
+    globalvar.set(tickRunning=True)
     # 0 - 3493
     if len(sys.argv) == 1:
         startCode = None
@@ -91,14 +90,14 @@ def getTickThread():
     # start = pd.Timestamp('20180126')
     start = pd.Timestamp(GLOBAL('start_date'))
     end = pd.Timestamp(GLOBAL('end_date'))
-    # logger.info('pid: {0} starting..... from {1} to {2}, '
-    #             'startCode:{3}, endCode:{4}'.format(os.getpid(), start, end, startCode, endCode))
-    test_codes = ['300371']
+    logger.info('pid: {0} starting..... from {1} to {2}, '
+                'startCode:{3}, endCode:{4}'.format(os.getpid(), start, end, startCode, endCode))
+    # test_codes = ['300371']
     # for code in stock_list.code[startCode:endCode]:
     with click.progressbar(
-            # stock_list.code[startCode:endCode],
-            test_codes,
-            label="Merging get tick datas:",
+            stock_list.code[startCode:endCode],
+            # test_codes,
+            label="get tick datas:",
             item_show_func=lambda e: e if e is None else str(e[0]),
     ) as codes:
         for code in codes:
@@ -110,7 +109,7 @@ def getTickThread():
             aeg.get_tick(code, trade_days)
 
     aeg.exit()
-    tickRunning = False
+    globalvar.set(tickRunning=False)
     print("stop get tick thread")
 
 
@@ -118,7 +117,7 @@ def main():
     tickThread = threading.Thread(target=getTickThread)
 
     threads = []
-    for x in range(5):
+    for x in range(2):
         wthread = WriterTickMongo(mqueue)
         threads.append(wthread)
     threads.append(tickThread)

@@ -7,9 +7,10 @@ import functools
 import queue
 import datetime
 import pandas as pd
+import json
 
 __all__ = ['GLOBAL', 'MONGODB', 'logger', 'mqueue', 'get_stock_list', 'get_code_session',
-           'get_end', 'tickRunning']
+           'get_end', 'globalvar']
 
 # global var
 _cfg = ConfigParser()
@@ -23,7 +24,6 @@ elif GLOBAL('life') == 'production':
     logger = Log(GLOBAL('log_file').format(os.getpid()))
 
 mqueue = queue.Queue()
-tickRunning = True
 
 
 def get_stock_list(engine):
@@ -48,6 +48,49 @@ def get_end():
         end = end - datetime.timedelta(days=1)
     end = pd.Timestamp(end)
     return end
+
+class GlobalMap:
+    # 拼装成字典构造全局变量  借鉴map  包含变量的增删改查
+    map = {}
+
+    def set_map(self, key, value):
+        if(isinstance(value, dict)):
+            value = json.dumps(value)
+        self.map[key] = value
+
+    def set(self, **kv):
+        try:
+            for key_, value_ in kv.items():
+                self.map[key_] = value_
+        except BaseException as msg:
+            print(msg)
+            raise msg
+
+    def del_map(self, key):
+        try:
+            del self.map[key]
+            return self.map
+        except KeyError:
+            print("key:'" + str(key) + "'  不存在")
+
+    def get(self, *args):
+        try:
+            dic = {}
+            for key in args:
+                if len(args) == 1:
+                    dic = self.map[key]
+                elif len(args) == 1 and args[0] == 'all':
+                    dic = self.map
+                else:
+                    dic[key]=self.map[key]
+            return dic
+        except KeyError:
+            print("key:'" + str(key) + "'  不存在")
+            return 'Null_'
+
+
+globalvar = GlobalMap()
+globalvar.set(tickRunning=True)
 
 if __name__ == '__main__':
     name = GLOBAL('log_file').format(os.getpid())

@@ -87,6 +87,7 @@ def getTickThread():
     aeg = TEngine(mqueue, ip='180.153.18.170', auto_retry=True, raise_exception=True)
     aeg.connect()
     stock_list = get_stock_list(aeg)
+    globalvar.set(stock_list=stock_list)
     # start = pd.Timestamp('20180126')
     start = pd.Timestamp(GLOBAL('start_date'))
     end = pd.Timestamp(GLOBAL('end_date'))

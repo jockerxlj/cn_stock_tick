@@ -93,5 +93,4 @@ globalvar = GlobalMap()
 globalvar.set(tickRunning=True)
 
 if __name__ == '__main__':
-    name = GLOBAL('log_file').format(os.getpid())
-    print(name)
+    print(GLOBAL('last_finishing'))

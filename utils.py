@@ -10,7 +10,7 @@ import pandas as pd
 import json
 
 __all__ = ['GLOBAL', 'MONGODB', 'logger', 'mqueue', 'get_stock_list', 'get_code_session',
-           'get_end', 'globalvar']
+           'get_end', 'globalvar', 'get_last_finishing', 'set_last_finishing']
 
 # global var
 _cfg = ConfigParser()
@@ -21,7 +21,7 @@ MONGODB = functools.partial(_cfg.get, 'mongodb')
 if GLOBAL('life') == 'development':
     logger = Log('log/log.txt')
 elif GLOBAL('life') == 'production':
-    logger = Log(GLOBAL('log_file').format(os.getpid()))
+    logger = Log(GLOBAL('log_file').format('normal'))
 
 mqueue = queue.Queue()
 
@@ -48,6 +48,19 @@ def get_end():
         end = end - datetime.timedelta(days=1)
     end = pd.Timestamp(end)
     return end
+
+
+def get_last_finishing():
+    cfg = globalvar.get('cfg')
+    return cfg.get('processing', 'last_finishing')
+
+
+def set_last_finishing(codeIndex):
+    cfg = globalvar.get('cfg')
+    cfg.set('processing', 'last_finishing', str(codeIndex))
+    with open('config/tick.conf', 'w+') as f:
+        cfg.write(f)
+
 
 class GlobalMap:
     # 拼装成字典构造全局变量  借鉴map  包含变量的增删改查
@@ -91,6 +104,10 @@ class GlobalMap:
 
 globalvar = GlobalMap()
 globalvar.set(tickRunning=True)
+globalvar.set(cfg=_cfg)
 
 if __name__ == '__main__':
-    print(GLOBAL('last_finishing'))
+    cfg = globalvar.get('cfg')
+    cfg.set('processing', 'last_finishing', '000002')
+    with open('config/tick.conf', 'w+') as f:
+        cfg.write(f)

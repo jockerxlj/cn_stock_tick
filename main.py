@@ -14,9 +14,11 @@ import os, sys
 
 from tdx.engine import Engine, AsyncEngine, get_stock_type
 
-from utils import get_code_session, get_stock_list, GLOBAL, logger, mqueue, globalvar
+from utils import get_code_session, get_stock_list, GLOBAL, logger, \
+    mqueue, globalvar, set_last_finishing, get_last_finishing
 
 from tickWriter import WriterTickMongo
+from mongohelper import MongoHelper
 
 class TEngine(AsyncEngine):
     def __init__(self, queue, *args, **kwargs):
@@ -76,23 +78,26 @@ def getTickThread():
     globalvar.set(tickRunning=True)
     # 0 - 3493
     if len(sys.argv) == 1:
-        startCode = None
-        endCode = None
+        startCode = int(get_last_finishing())
+        endCode = -1
     elif len(sys.argv) == 2:
         startCode = int(sys.argv[1])
-        endCode = None
+        endCode = -1
     else:
         startCode = int(sys.argv[1])
         endCode = int(sys.argv[2])
     aeg = TEngine(mqueue, ip='180.153.18.170', auto_retry=True, raise_exception=True)
     aeg.connect()
     stock_list = get_stock_list(aeg)
-    globalvar.set(stock_list=stock_list)
     # start = pd.Timestamp('20180126')
     start = pd.Timestamp(GLOBAL('start_date'))
     end = pd.Timestamp(GLOBAL('end_date'))
+    helper = MongoHelper(stock_list.code.tolist())
+    startCode = helper.delete_nearest_not_empty_code(stock_list.code.iloc[startCode])
+
     logger.info('pid: {0} starting..... from {1} to {2}, '
-                'startCode:{3}, endCode:{4}'.format(os.getpid(), start, end, startCode, endCode))
+                'startCode:{3}, endCode:{4}'.format(os.getpid(), start, end,
+                    stock_list.code.iloc[startCode], stock_list.code.iloc[endCode]))
     # test_codes = ['300371']
     # for code in stock_list.code[startCode:endCode]:
     with click.progressbar(
@@ -103,6 +108,7 @@ def getTickThread():
     ) as codes:
         for code in codes:
             logger.info('pid: {0} get code {1}'.format(os.getpid(), code))
+            set_last_finishing(stock_list.code.tolist().index(code))
             sessions = get_code_session(aeg, code, start, end)
             if len(sessions) == 0:
                 continue

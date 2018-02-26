@@ -78,7 +78,7 @@ def getTickThread():
     globalvar.set(tickRunning=True)
     # 0 - 3493
     if len(sys.argv) == 1:
-        startCode = int(get_last_finishing())
+        startCode = 0
         endCode = -1
     elif len(sys.argv) == 2:
         startCode = int(sys.argv[1])
@@ -86,14 +86,17 @@ def getTickThread():
     else:
         startCode = int(sys.argv[1])
         endCode = int(sys.argv[2])
-    aeg = TEngine(mqueue, ip='180.153.18.170', auto_retry=True, raise_exception=True)
+    aeg = TEngine(mqueue, ip='180.153.18.171', auto_retry=True, raise_exception=True)
     aeg.connect()
     stock_list = get_stock_list(aeg)
     # start = pd.Timestamp('20180126')
     start = pd.Timestamp(GLOBAL('start_date'))
-    end = pd.Timestamp(GLOBAL('end_date'))
+    now = pd.Timestamp('now')
+    end = now.normalize()
+    if now.time() < datetime.time(15, 5):
+        end = end - pd.Timedelta('1d')
     helper = MongoHelper(stock_list.code.tolist())
-    startCode = helper.delete_nearest_not_empty_code(stock_list.code.iloc[startCode])
+    # startCode = helper.delete_nearest_not_empty_code(stock_list.code.iloc[startCode])
 
     logger.info('pid: {0} starting..... from {1} to {2}, '
                 'startCode:{3}, endCode:{4}'.format(os.getpid(), start, end,
@@ -107,7 +110,8 @@ def getTickThread():
             item_show_func=lambda e: e if e is None else str(e[0]),
     ) as codes:
         for code in codes:
-            logger.info('pid: {0} get code {1}'.format(os.getpid(), code))
+            start = helper.get_code_start_date(code)
+            logger.info('pid: {0} get code {1} start date {2}'.format(os.getpid(), code, start))
             set_last_finishing(stock_list.code.tolist().index(code))
             sessions = get_code_session(aeg, code, start, end)
             if len(sessions) == 0:
@@ -124,7 +128,7 @@ def main():
     tickThread = threading.Thread(target=getTickThread)
 
     threads = []
-    for x in range(2):
+    for x in range(5):
         wthread = WriterTickMongo(mqueue)
         threads.append(wthread)
     threads.append(tickThread)

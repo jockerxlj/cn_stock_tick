@@ -14,11 +14,12 @@ class WriterTickMongo(threading.Thread):
         super(WriterTickMongo, self).__init__()
         self.queue = queue
         self.conn = pymongo.MongoClient(MONGODB('db_host'), int(MONGODB('db_port')))
-        self.stock_tick_db = self.conn.stock_tick
+
         if GLOBAL('life') == 'production':
-            self.post = self.stock_tick_db.tick
+            self.stock_tick_db = self.conn.stock_tick
         else:
-            self.post = self.stock_tick_db.tick_test
+            # self.post = self.stock_tick_db.tick_test
+            self.stock_tick_db = self.conn.stock_tick_test
 
     def run(self):
         print('start mongo write tick thread')
@@ -38,7 +39,16 @@ class WriterTickMongo(threading.Thread):
                 # logger.debug(map)
                 buf.append(map)
                 if len(buf) == 1000:
-                    self.post.insert(buf)
+                    for map in buf:
+                        self.create_post_if_not_exist(map['code'])
+                        self.stock_tick_db[str(map['code'])].insert(map)
                     buf.clear()
             if len(buf):
-                self.post.insert(buf)
+                for map in buf:
+                    self.create_post_if_not_exist(map['code'])
+                    self.stock_tick_db[str(map['code'])].insert(map)
+
+    def create_post_if_not_exist(self, code):
+        if str(code) not in self.stock_tick_db.collection_names():
+            self.stock_tick_db[str(code)].create_index(
+                [("code", pymongo.DESCENDING), ("date", pymongo.DESCENDING)], unique=True)

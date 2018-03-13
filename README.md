@@ -2,7 +2,10 @@
 - cn_stock_tick项目可以获取从1991年至程序运行当天A股所有股票的分笔数据并将其存入mongodb中，支持断点续传和增量。
 
 # prerequisite
-pytdx and tdx
+项目运行在python3.5上，依赖于
+- pytdx: https://github.com/rainx/pytdx
+- tdx: https://github.com/JaysonAlbert/tdx
+如果以后还有另外的需求的话，再考虑另行增加requirement.txt和pip install。
 
 # install & run
 ```bash

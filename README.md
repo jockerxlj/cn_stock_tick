@@ -5,6 +5,7 @@
 项目运行在python3.5上，依赖于
 - pytdx: https://github.com/rainx/pytdx
 - tdx: https://github.com/JaysonAlbert/tdx
+
 如果以后还有另外的需求的话，再考虑另行增加requirement.txt和pip install。
 
 # install & run
